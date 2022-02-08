@@ -30,14 +30,14 @@ public:
 ScanSynchronizer::ScanSynchronizer(ros::NodeHandle* nh)
     :frequency(15)
 {
-    scan1_sub_ = nh_.subscribe("/scan", 100, 
+    scan1_sub_ = nh_.subscribe("/scan_1", 100, 
                     &ScanSynchronizer::scan1Callback, this);
-    scan2_sub_ = nh_.subscribe("/gl3/scan/filtered", 100, 
+    scan2_sub_ = nh_.subscribe("/scan_2", 100, 
                     &ScanSynchronizer::scan2Callback, this);
     timer = nh_.createTimer(ros::Duration(1/frequency), 
        boost::bind(&ScanSynchronizer::timerCallback, this, _1));
-    scan1_pub_ = nh_.advertise<sensor_msgs::LaserScan>("/scan1_new", 100);
-    scan2_pub_ = nh_.advertise<sensor_msgs::LaserScan>("/scan2_new", 100);
+    scan1_pub_ = nh_.advertise<sensor_msgs::LaserScan>("/scan_front", 100);
+    scan2_pub_ = nh_.advertise<sensor_msgs::LaserScan>("/scan_rear", 100);
     publishLoop(frequency);
 }
 
@@ -67,24 +67,27 @@ void ScanSynchronizer::publishLoop(int frequency)
     ros::Rate loop_rate(15);
     while(ros::ok())
     {
-        double current_time = ros::Time::now().toSec();
+        auto current_time = ros::Time::now();
         double threshold;
         if(!scan1_deque_.empty()){
             while(abs(scan1_deque_.front().header.stamp.toSec() 
-                    - current_time) >  scan1_del_t_)
+                    - current_time.toSec()) >  scan1_del_t_)
                 scan1_deque_.pop_front();
 
             auto scan1_msg = scan1_deque_.front();
+            scan1_msg.header.stamp = current_time;
             scan1_deque_.pop_front();
             scan1_pub_.publish(scan1_msg);
         }
         if(!scan2_deque_.empty()){
             while(abs(scan2_deque_.front().header.stamp.toSec() 
-                    - current_time) >  scan2_del_t_)
+                    - current_time.toSec()) >  scan2_del_t_)
                 scan2_deque_.pop_front();
 
             auto scan2_msg = scan2_deque_.front();
+            scan2_msg.header.stamp = current_time;
             scan2_deque_.pop_front();
+            scan2_pub_.publish(scan2_msg);
         }
         ros::spinOnce();
         loop_rate.sleep();
